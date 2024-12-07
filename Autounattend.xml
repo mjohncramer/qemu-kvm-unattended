@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <!-- Windows PE Pass -->
+  <settings pass="windowsPE">
+    <!-- Install storage drivers before partitioning -->
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <!-- Driver Paths for Setup -->
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>X:\$WinPEDriver$\viostor</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+
+      <!-- Image Selection by Index -->
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>2</Value>
+            </MetaData>
+          </InstallFrom>
+          <WillShowUI>OnError</WillShowUI>
+        </OSImage>
+      </ImageInstall>
+
+      <!-- User Data -->
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>Administrator</FullName>
+        <Organization>MyOrganization</Organization>
+      </UserData>
+
+      <!-- Disk Configuration -->
+      <DiskConfiguration>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <!-- EFI System Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>100</Size>
+            </CreatePartition>
+            <!-- Microsoft Reserved Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+            <!-- Windows Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <!-- Format EFI System Partition -->
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Format>FAT32</Format>
+              <Label>System</Label>
+            </ModifyPartition>
+            <!-- Format Windows Partition -->
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>3</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Windows</Label>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+        <WillShowUI>OnError</WillShowUI>
+      </DiskConfiguration>
+    </component>
+
+    <!-- PnP Customizations for Windows PE -->
+    <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <!-- Specify the path to the storage drivers -->
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>X:\$WinPEDriver$\viostor</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <!-- Language and Locale Settings -->
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <SetupUILanguage>
+        <UILanguage>en-US</UILanguage>
+      </SetupUILanguage>
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+  </settings>
+
+  <!-- Specialize Pass -->
+  <settings pass="specialize">
+    <!-- Computer Name and Product Key -->
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <ComputerName>*</ComputerName>
+      <TimeZone>UTC</TimeZone>
+      <RegisteredOwner>Administrator</RegisteredOwner>
+      <RegisteredOrganization>MyOrganization</RegisteredOrganization>
+      <!-- Disable Automatic Driver Installation to Enhance Security -->
+      <DeviceInstall> 
+        <DevicePolicies>
+          <ExcludeDrivers>*</ExcludeDrivers>
+        </DevicePolicies>
+      </DeviceInstall>
+    </component>
+
+    <!-- Enable Remote Desktop with Enhanced Security -->
+    <component name="Microsoft-Windows-TerminalServices-LocalSessionManager" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <fDenyTSConnections>false</fDenyTSConnections>
+      <Security>
+        <AuthenticationLevel>2</AuthenticationLevel> <!-- Network Level Authentication -->
+        <EncryptionLevel>3</EncryptionLevel> <!-- High Encryption -->
+      </Security>
+    </component>
+
+    <!-- PnP Customizations for Windows Setup -->
+    <component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>C:\Drivers</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <!-- Configure Windows Defender for Enhanced Security -->
+    <component name="Microsoft-Windows-Windows Defender" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <DisableAntiSpyware>false</DisableAntiSpyware>
+      <SignatureUpdateInterval>1</SignatureUpdateInterval> <!-- Daily Updates -->
+    </component>
+  </settings>
+
+  <!-- OOBE System Pass -->
+  <settings pass="oobeSystem">
+    <!-- Regional Settings -->
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <!-- OOBE Customization and User Account Setup -->
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+        <SkipUserOOBE>true</SkipUserOOBE>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+      </OOBE>
+      <UserAccounts>
+        <AdministratorPassword>
+          <!-- Hashed password for security -->
+          <Value>BASE64_HASH_ADMIN</Value>
+          <PlainText>false</PlainText>
+        </AdministratorPassword>
+        <LocalAccounts>
+          <!-- Create user with dynamic username and hashed password -->
+          <LocalAccount wcm:action="add">
+            <Name>USERNAME_PLACEHOLDER</Name>
+            <DisplayName>USERNAME_PLACEHOLDER_DISPLAY</DisplayName>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>BASE64_HASH_USER</Value>
+              <PlainText>false</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+      <AutoLogon>
+        <Username>Administrator</Username>
+        <Password>
+          <Value>BASE64_HASH_ADMIN</Value>
+          <PlainText>false</PlainText>
+        </Password>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+      </AutoLogon>
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <CommandLine>powershell.exe -ExecutionPolicy Bypass -File "C:\setup.ps1" -Username "USERNAME_PLACEHOLDER"</CommandLine>
+          <Order>1</Order>
+          <Description>Configure System</Description>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+      <!-- Disable Server Manager at logon for Enhanced Performance -->
+      <DoNotOpenServerManagerAtLogon>true</DoNotOpenServerManagerAtLogon>
+      <!-- Disable Cortana and Telemetry for Enhanced Privacy and Performance -->
+      <DisableCortana>true</DisableCortana>
+      <Telemetry>
+        <DataCollection>Basic</DataCollection>
+      </Telemetry>
+    </component>
+
+    <!-- Configure Windows Firewall for Enhanced Security -->
+    <component name="Microsoft-Windows-WindowsFirewall" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <FirewallRules>
+        <Rule wcm:action="add">
+          <Name>OpenSSH-Server-In-TCP</Name>
+          <Description>Allow SSH Inbound</Description>
+          <Enabled>true</Enabled>
+          <Action>Allow</Action>
+          <Direction>In</Direction>
+          <Protocol>TCP</Protocol>
+          <LocalPort>22</LocalPort>
+          <Profiles>Domain,Private,Public</Profiles>
+        </Rule>
+        <Rule wcm:action="add">
+          <Name>RemoteDesktop-In-TCP</Name>
+          <Description>Allow Remote Desktop Inbound</Description>
+          <Enabled>true</Enabled>
+          <Action>Allow</Action>
+          <Direction>In</Direction>
+          <Protocol>TCP</Protocol>
+          <LocalPort>3389</LocalPort>
+          <Profiles>Domain,Private,Public</Profiles>
+        </Rule>
+      </FirewallRules>
+    </component>
+  </settings>
+
+  <!-- RunSynchronous Commands for Enhanced Performance and Security -->
+  <settings pass="generalize">
+    <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Path>cmd.exe /c sfc /scannow</Path>
+          <Description>System File Checker</Description>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Path>cmd.exe /c dism /online /cleanup-image /restorehealth</Path>
+          <Description>DISM Health Check</Description>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+</unattend>
