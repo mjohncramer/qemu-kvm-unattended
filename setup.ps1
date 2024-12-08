@@ -2,8 +2,7 @@
 
 # =============================================================================
 # Script Name: setup.ps1
-# Description: Configures Windows Server 2025 post-installation settings,
-#              enhancing security, reliability, and performance.
+# Description: Configures Windows Server 2025 post-installation
 # =============================================================================
 
 param (
@@ -186,7 +185,7 @@ function Install-WindowsUpdates {
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
 
     # Add Microsoft Update Service
-    Add-WUServiceManager -ServiceID "7971f918-a847-4430-9279-4a52d1efe18d" # Microsoft Update Service
+    Add-WUServiceManager -ServiceID "7971f918-a847-4430-9279-4a52d1efe18d"
 
     # Install all available updates and reboot if necessary
     Get-WindowsUpdate -AcceptAll -Install -AutoReboot
