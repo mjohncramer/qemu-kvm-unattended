@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # =============================================================================
-# Script Name: deploy-kvm.sh
-# Description: Deploys a highly secure, reliable, and performant Windows Server
-#              2025 virtual machine using KVM/QEMU with divine precision.
+# Script Name: deploy-kvm-win2kserver.sh
+# Description: Deploys a Windows Server virtual machine using KVM/QEMU.
 # =============================================================================
 
 set -euo pipefail
@@ -333,7 +332,7 @@ completion_message() {
     echo "Virtual machine '$VM_NAME' has been created and is now being installed."
     echo "Manage the VM using virt-manager or connect via the SPICE protocol."
     echo "Log file located at '$LOG_FILE'."
-    echo -e "${GREEN}===== Deployment Echo: Let the world witness our triumph! =====${NC}"
+    echo -e "${GREEN}===== Deploymement Completed Sucessfully! =====${NC}"
 }
 
 ###############################
