@@ -23,8 +23,8 @@ AUTOUNATTEND_ISO="/home/mcramer/.local/share/libvirt/boot/autounattend.iso"
 BRIDGE="virbr0"        # Network bridge
 GRAPHICS_PASSWORD=""   # SPICE graphics console password
 DISK_PATH="/home/mcramer/.local/share/libvirt/storage/${VM_NAME}.qcow2"
-UEFI_LOADER="/usr/share/OVMF/OVMF_CODE.secboot.fd"  # Secure Boot UEFI loader
-UEFI_VARS_TEMPLATE="/usr/share/OVMF/OVMF_VARS.fd"  # Secure Boot UEFI vars
+UEFI_LOADER="/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"  # Secure Boot UEFI loader
+UEFI_VARS_TEMPLATE="/usr/share/OVMF/OVMF_VARS_4M.ms.fd"  # Secure Boot UEFI vars
 UEFI_VARS="/home/mcramer/.config/libvirt/qemu/nvram/${VM_NAME}_VARS.fd"
 OS_VARIANT="win2k25"   # OS variant optimized for Windows Server 2025
 CPU_MODEL="host-passthrough"  # Default CPU model
@@ -163,20 +163,14 @@ generate_password_hash() {
 validate_environment() {
     echo -e "${BLUE}Validating environment...${NC}"
 
-    # Check if running as a non-root user
-    if [[ $EUID -eq 0 ]]; then
-        echo -e "${RED}Error:${NC} This script must not be run as root."
-        exit 1
-    fi
-
-    # Check for required group membership
-    if ! groups | grep -q "\\blibvirt\\b"; then
-        echo -e "${RED}Error:${NC} User must be part of the 'libvirt' group to manage virtual machines."
+    # Check if running as root
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "${RED}Error:${NC} This script must be run as root."
         exit 1
     fi
 
     # Check if required commands are available
-    local required_cmds=("virt-install" "genisoimage" "cp" "mkdir" "qemu-img" "mount" "umount" "mktemp" "iconv")
+    local required_cmds=("virt-install" "genisoimage" "cp" "mkdir" "qemu-img" "mount" "umount" "mktemp" "sudo" "iconv")
     for cmd in "${required_cmds[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
             echo -e "${RED}Error:${NC} Required command '$cmd' is not installed."

@@ -1,6 +1,6 @@
 variables:
   GITHUB_REPOSITORY: "qemu-kvm-unattended"
-  GITHUB_REPO_PRIVATE: "false"
+  GITHUB_REPO_PRIVATE: "true"
 include:
   - project: 'shared-configuration/ci_cd'
     file: 'github-deploy.yml'
