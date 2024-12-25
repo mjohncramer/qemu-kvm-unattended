@@ -20,13 +20,13 @@ DISK_SIZE="25"         # Disk size in GB
 ISO_PATH="/var/lib/libvirt/images/26100.1742.240906-0331.ge_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso"
 VIRTIO_ISO_PATH="/var/lib/libvirt/images/virtio-win-0.1.266.iso"
 AUTOUNATTEND_ISO="/var/lib/libvirt/images/autounattend.iso"
-BRIDGE="virbr0"        # Network bridge
+#NETWORK_TYPE="network"     # Network type (default or isolated-net)
 GRAPHICS_PASSWORD=""   # SPICE graphics console password
 DISK_PATH="/var/lib/libvirt/storage/${VM_NAME}.qcow2"
 UEFI_LOADER="/usr/share/OVMF/OVMF_CODE.secboot.fd"  # Secure Boot UEFI loader
 UEFI_VARS_TEMPLATE="/usr/share/OVMF/OVMF_VARS.fd"  # Secure Boot UEFI vars
 UEFI_VARS="/var/lib/libvirt/nvram/${VM_NAME}_VARS.fd"
-OS_VARIANT="win2k25"   # OS variant optimized for Windows Server 2025
+OS_VARIANT="win2k22"   # OS variant recognized by virt-install
 CPU_MODEL="host-passthrough"  # Default CPU model
 
 # Windows Version Variables
@@ -72,7 +72,7 @@ ${YELLOW}Options:${NC}
   -i ISO_PATH            Path to the Windows Server ISO
   -v VIRTIO_ISO_PATH     Path to the VirtIO drivers ISO
   -a AUTOUNATTEND_ISO    Path to the Autounattend ISO (default: /var/lib/libvirt/boot/autounattend.iso)
-  -b BRIDGE              Network bridge to use (default: virbr0)
+  -t NETWORK_TYPE        Network type (nat or isolated, default: nat)
   -p GRAPHICS_PASSWORD   Password for SPICE graphics console
   -m CPU_MODEL           CPU model (host, host-passthrough, etc.)
   -w WIN_VERSION         Windows version for VirtIO drivers (default: 2k25)
@@ -88,7 +88,7 @@ EOF
 
 # Parse command-line arguments
 parse_arguments() {
-    while getopts "n:r:c:d:i:v:a:b:p:m:w:x:u:h" opt; do
+    while getopts "n:r:c:d:i:v:a:t:p:m:w:x:u:h" opt; do
         case "$opt" in
             n) VM_NAME="$OPTARG" ;;
             r) RAM="$OPTARG" ;;
@@ -97,7 +97,7 @@ parse_arguments() {
             i) ISO_PATH="$OPTARG" ;;
             v) VIRTIO_ISO_PATH="$OPTARG" ;;
             a) AUTOUNATTEND_ISO="$OPTARG" ;;
-            b) BRIDGE="$OPTARG" ;;
+            t) NETWORK_TYPE="$OPTARG" ;;
             p) GRAPHICS_PASSWORD="$OPTARG" ;;
             m) CPU_MODEL="$OPTARG" ;;
             w) WIN_VERSION="$OPTARG" ;;
@@ -159,6 +159,20 @@ generate_password_hash() {
     echo -n "$password" | iconv -t utf16le | base64
 }
 
+# Cleanup function to ensure resources are released
+cleanup() {
+    echo -e "${BLUE}Cleaning up...${NC}"
+    if [[ -n "${loop_device:-}" ]]; then
+        sudo umount "$virtio_mount" || true
+        sudo losetup -d "$loop_device" || true
+        rmdir "$virtio_mount" || true
+    fi
+    rm -rf "${temp_dir:-}" || true
+    rm -f "$AUTOUNATTEND_ISO" || true
+    rm -f "$DISK_PATH" || true
+    echo -e "${GREEN}Cleanup completed.${NC}"
+}
+
 # Check for necessary files and permissions
 validate_environment() {
     echo -e "${BLUE}Validating environment...${NC}"
@@ -176,7 +190,7 @@ validate_environment() {
 #    fi
 
     # Check if required commands are available
-    local required_cmds=("virt-install" "genisoimage" "cp" "mkdir" "qemu-img" "mount" "umount" "mktemp" "iconv")
+    local required_cmds=("virt-install" "genisoimage" "cp" "mkdir" "qemu-img" "mount" "umount" "mktemp" "iconv" "losetup")
     for cmd in "${required_cmds[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
             echo -e "${RED}Error:${NC} Required command '$cmd' is not installed."
@@ -201,14 +215,24 @@ validate_environment() {
 
     # Check if DISK_PATH already exists
     if [[ -f "$DISK_PATH" ]]; then
-        echo -e "${RED}Error:${NC} Disk image '$DISK_PATH' already exists."
-        exit 1
-    fi
-
-    # Verify network bridge exists
-    if ! ip link show "$BRIDGE" &>/dev/null; then
-        echo -e "${RED}Error:${NC} Network bridge '$BRIDGE' does not exist."
-        exit 1
+        echo -e "${YELLOW}Warning:${NC} Disk image '$DISK_PATH' already exists."
+        while true; do
+            read -p "Do you want to remove the existing image? (y/n): " choice
+            case "$choice" in
+                y|Y )
+                    rm -f "$DISK_PATH"
+                    echo -e "${GREEN}Existing disk image removed.${NC}"
+                    break
+                    ;;
+                n|N )
+                    echo -e "${RED}Error:${NC} Disk image '$DISK_PATH' already exists. Exiting."
+                    exit 1
+                    ;;
+                * )
+                    echo -e "${RED}Invalid choice. Please enter 'y' or 'n'.${NC}"
+                    ;;
+            esac
+        done
     fi
 
     echo -e "${GREEN}Environment validation passed.${NC}"
@@ -226,9 +250,8 @@ prepare_uefi_vars() {
 create_autounattend_iso() {
     echo -e "${BLUE}Creating Autounattend ISO...${NC}"
 
-    local temp_dir
     temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
+    trap 'cleanup' EXIT
 
     # Copy Autounattend.xml and setup.ps1 to temp directory
     cp "${SCRIPT_DIR}/Autounattend.xml" "${SCRIPT_DIR}/setup.ps1" "$temp_dir/"
@@ -245,9 +268,13 @@ create_autounattend_iso() {
     mkdir -p "$temp_dir/Drivers"
 
     # Mount VirtIO ISO and copy drivers
-    local virtio_mount
     virtio_mount=$(mktemp -d)
-    mount -o loop "$VIRTIO_ISO_PATH" "$virtio_mount"
+    loop_device=$(sudo losetup --find --show "$VIRTIO_ISO_PATH")
+    if ! sudo mount "$loop_device" "$virtio_mount"; then
+        echo -e "${RED}Error:${NC} Failed to mount VirtIO ISO at '$VIRTIO_ISO_PATH'."
+        sudo losetup -d "$loop_device"
+        exit 1
+    fi
 
     # Copy storage drivers
     if [[ -d "$virtio_mount/viostor/${WIN_VERSION}/amd64" ]]; then
@@ -266,22 +293,21 @@ create_autounattend_iso() {
     fi
 
     # Copy graphics drivers
-    if [[ -d "$virtio_mount/qxl/${WIN_VERSION}/amd64" ]]; then
-        cp -r "$virtio_mount/qxl/${WIN_VERSION}/amd64/." "$temp_dir/Drivers/"
+    if [[ -d "$virtio_mount/viogpudo/${WIN_VERSION}/amd64" ]]; then
+        cp -r "$virtio_mount/viogpudo/${WIN_VERSION}/amd64/." "$temp_dir/Drivers/"
         echo -e "${GREEN}Graphics drivers copied.${NC}"
     else
-        echo -e "${YELLOW}Warning:${NC} Graphics drivers not found for version '$WIN_VERSION'."
+        echo -e "${YELLOW}Warning:${NC} Graphics drivers not found for version 'win10'."
     fi
 
     # Unmount VirtIO ISO
-    umount "$virtio_mount"
+    sudo umount "$virtio_mount"
+    sudo losetup -d "$loop_device"
     rmdir "$virtio_mount"
 
     # Generate Autounattend ISO
     genisoimage -o "$AUTOUNATTEND_ISO" -udf -input-charset utf8 "$temp_dir/"
     echo -e "${GREEN}Autounattend ISO created at '$AUTOUNATTEND_ISO'.${NC}"
-
-    trap - EXIT
 }
 
 # Create disk image
@@ -289,14 +315,6 @@ create_disk_image() {
     echo -e "${BLUE}Creating disk image at '$DISK_PATH'...${NC}"
     qemu-img create -f qcow2 "$DISK_PATH" "${DISK_SIZE}G"
     echo -e "${GREEN}Disk image created.${NC}"
-}
-
-# Optimize disk image for performance
-optimize_disk_image() {
-    echo -e "${BLUE}Optimizing disk image for performance...${NC}"
-    qemu-img convert -O qcow2 "$DISK_PATH" "${DISK_PATH}.optimized.qcow2" \
-        && mv "${DISK_PATH}.optimized.qcow2" "$DISK_PATH"
-    echo -e "${GREEN}Disk image optimized.${NC}"
 }
 
 # Create and install the virtual machine
@@ -307,19 +325,22 @@ create_vm() {
         --name "$VM_NAME" \
         --memory "$RAM" \
         --vcpus "$VCPUS",cores="$VCPUS",threads=1,sockets=1 \
-        --cpu "$CPU_MODEL",hv_relaxed=on,hv_vapic,hv_time,hv_spinlocks=0x1fff \
-        --machine type=q35,accel=kvm \
+        --cpu "$CPU_MODEL" \
+        --machine q35 \
         --os-variant "$OS_VARIANT" \
-        --boot loader="$UEFI_LOADER",loader_ro=yes,loader_type=pflash,nvram="$UEFI_VARS",secureboot=on \
-        --disk path="$DISK_PATH",size="$DISK_SIZE",format=qcow2,bus=virtio,cache=none,discard=unmap,aio=threads,detect_zeroes=unmap \
+        --cdrom="$ISO_PATH"
+        --boot cdrom,hd,menu=off \
+#        --boot loader="$UEFI_LOADER",nvram="$UEFI_VARS" \
+        --disk path="$DISK_PATH",size="$DISK_SIZE",format=qcow2,bus=virtio,cache=none,discard=unmap,detect_zeroes=unmap \
         --disk "$ISO_PATH",device=cdrom,boot_order=1 \
         --disk "$AUTOUNATTEND_ISO",device=cdrom \
-        --network bridge="$BRIDGE",model=virtio-net-pci \
-        --graphics spice,gl=on${GRAPHICS_PASSWORD:+,password=$GRAPHICS_PASSWORD},listen=none \
+        --network user,model=virtio-net-pci \
+        --graphics spice${GRAPHICS_PASSWORD:+,password=$GRAPHICS_PASSWORD},listen=none \
         --video qxl \
-        --channel spicevmc \
-        --sound none \
-        --tpm emulator,model=tpm-crb \
+        --accelerate \
+        --channel spicevmc,target.type=virtio \
+#        --sound none \
+#        --tpm emulator,model=tpm-crb \
         --features kvm_hidden=on \
         --memorybacking hugepages=on \
         --noautoconsole \
@@ -327,7 +348,9 @@ create_vm() {
         --events on_reboot=restart \
         --metadata title="Windows Server $WIN_VERSION VM",description="Secure and performance-optimized deployment." \
         --check all=off \
-        --parallel none
+#        --parallel none \
+#        --qemu-commandline="-cpu host,hv_relaxed=on,hv_vapic=on,hv_time=on,hv_spinlocks=0x1fff"
+        --qemu-commandline="-cpu host"
 
     echo -e "${GREEN}Virtual machine '$VM_NAME' creation initiated.${NC}"
 }
@@ -338,7 +361,7 @@ completion_message() {
     echo "Virtual machine '$VM_NAME' has been created and is now being installed."
     echo "Manage the VM using virt-manager or connect via the SPICE protocol."
     echo "Log file located at '$LOG_FILE'."
-    echo -e "${GREEN}===== Deploymement Completed Sucessfully! =====${NC}"
+    echo -e "${GREEN}===== Deployment Completed Successfully! =====${NC}"
 }
 
 ###############################
@@ -355,7 +378,6 @@ main() {
     prepare_uefi_vars
     create_autounattend_iso
     create_disk_image
-    optimize_disk_image
     create_vm
     completion_message
 }
